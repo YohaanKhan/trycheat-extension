@@ -12,7 +12,7 @@ import { startSnapshotSystem } from './snapshot/snapshotSystem';
  *                  subscriptions and intervals are cleaned up on deactivation.
  */
 export function activate(context: vscode.ExtensionContext) {
-    console.log('ExamProctor is now active.');
+    console.log('TryCheat is now active.');
 
     // Wire up all keystroke, paste, focus, and file switch telemetry listeners
     registerTelemetry(context);
@@ -21,8 +21,8 @@ export function activate(context: vscode.ExtensionContext) {
     startSnapshotSystem(context);
 
     // Scaffold hello world command — can be removed later
-    const disposable = vscode.commands.registerCommand('examproctor.helloWorld', () => {
-        vscode.window.showInformationMessage('ExamProctor is running!');
+    const disposable = vscode.commands.registerCommand('trycheat.helloWorld', () => {
+        vscode.window.showInformationMessage('TryCheat is running!');
     });
 
     context.subscriptions.push(disposable);
