@@ -1,26 +1,36 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { registerTelemetry } from './telemetry/telemetryModule';
+import { startSnapshotSystem } from './snapshot/snapshotSystem';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
+/**
+ * Called by VS Code once when the extension is first activated.
+ * Activation is triggered by the events defined in `activationEvents` in package.json.
+ *
+ * This is the entry point of the entire extension — everything gets wired up here.
+ *
+ * @param context - Provided by VS Code. Used to register disposables so all
+ *                  subscriptions and intervals are cleaned up on deactivation.
+ */
 export function activate(context: vscode.ExtensionContext) {
+    console.log('ExamProctor is now active.');
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "trycheat" is now active!');
+    // Wire up all keystroke, paste, focus, and file switch telemetry listeners
+    registerTelemetry(context);
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('trycheat.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from TryCheat!');
-	});
+    // Start the 60-second snapshot timer
+    startSnapshotSystem(context);
 
-	context.subscriptions.push(disposable);
+    // Scaffold hello world command — can be removed later
+    const disposable = vscode.commands.registerCommand('examproctor.helloWorld', () => {
+        vscode.window.showInformationMessage('ExamProctor is running!');
+    });
+
+    context.subscriptions.push(disposable);
 }
 
-// This method is called when your extension is deactivated
+/**
+ * Called by VS Code when the extension is deactivated (e.g. VS Code closes).
+ * We don't need to manually clean up here — everything was pushed into
+ * `context.subscriptions` so VS Code handles disposal automatically.
+ */
 export function deactivate() {}
