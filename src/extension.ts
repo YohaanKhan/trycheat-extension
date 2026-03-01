@@ -1,36 +1,53 @@
 import * as vscode from 'vscode';
 import { registerTelemetry } from './telemetry/telemetryModule';
 import { startSnapshotSystem } from './snapshot/snapshotSystem';
+import { authenticateStudent } from './auth/studentAuth';
+import { transport } from './comms/transport';
+import { createQAPanel } from './webview/qaPanel';
 
 /**
- * Called by VS Code once when the extension is first activated.
- * Activation is triggered by the events defined in `activationEvents` in package.json.
+ * Entry point of the TryCheat extension.
+ * Runs once when VS Code activates the extension.
  *
- * This is the entry point of the entire extension — everything gets wired up here.
+ * Flow:
+ * 1. Authenticate the student (exam code + student ID)
+ * 2. Connect to the backend via WebSocket
+ * 3. Register all telemetry listeners
+ * 4. Start the snapshot timer
+ * 5. Open the Q&A panel beside the editor
  *
- * @param context - Provided by VS Code. Used to register disposables so all
- *                  subscriptions and intervals are cleaned up on deactivation.
+ * @param context - Provided by VS Code, used to register all disposables.
  */
-export function activate(context: vscode.ExtensionContext) {
-    console.log('TryCheat is now active.');
+export async function activate(context: vscode.ExtensionContext) {
+    console.log('TryCheat activating...');
 
-    // Wire up all keystroke, paste, focus, and file switch telemetry listeners
+    // Step 1 — Authenticate the student before starting anything
+    const auth = await authenticateStudent();
+    if (!auth) {
+        vscode.window.showErrorMessage('TryCheat: Authentication failed. Extension will not start.');
+        return;
+    }
+
+    vscode.window.showInformationMessage(`TryCheat: Welcome ${auth.studentId}. Exam ${auth.examCode} is now being monitored.`);
+
+    // Step 2 — Connect to backend (will queue events if backend isn't up yet)
+    transport.connect('ws://localhost:3000', auth.studentId);
+
+    // Step 3 — Register all telemetry listeners (keystrokes, pastes, focus, file switches)
     registerTelemetry(context);
 
-    // Start the 60-second snapshot timer
+    // Step 4 — Start periodic code snapshots every 60 seconds
     startSnapshotSystem(context);
 
-    // Scaffold hello world command — can be removed later
-    const disposable = vscode.commands.registerCommand('trycheat.helloWorld', () => {
-        vscode.window.showInformationMessage('TryCheat is running!');
-    });
-
-    context.subscriptions.push(disposable);
+    // Step 5 — Open the Q&A panel beside the editor
+    const panel = createQAPanel();
+    context.subscriptions.push({ dispose: () => panel.dispose() });
 }
 
 /**
- * Called by VS Code when the extension is deactivated (e.g. VS Code closes).
- * We don't need to manually clean up here — everything was pushed into
- * `context.subscriptions` so VS Code handles disposal automatically.
+ * Called by VS Code when the extension is deactivated.
+ * Cleanly closes the WebSocket connection.
  */
-export function deactivate() {}
+export function deactivate() {
+    transport.disconnect();
+}

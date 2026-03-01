@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { detectPaste } from './pasteDetector';
 import { getFocusEventType } from './focusTracker';
+import { transport } from '../comms/transport';
 
 /**
  * Registers all telemetry event subscriptions for the ExamProctor extension.
@@ -26,7 +27,7 @@ export function registerTelemetry(ctx: vscode.ExtensionContext): void {
             const isPaste = detectPaste(change);
 
             if (isPaste) {
-                console.log({
+                transport.send({
                     type: 'PASTE',
                     timeStamp: Date.now(),
                     file: event.document.fileName,
@@ -34,7 +35,7 @@ export function registerTelemetry(ctx: vscode.ExtensionContext): void {
                     content: change.text
                 });
             } else {
-                console.log({
+                transport.send({
                     type: 'KEYSTROKE',
                     timeStamp: Date.now(),
                     file: event.document.fileName,
@@ -51,7 +52,7 @@ export function registerTelemetry(ctx: vscode.ExtensionContext): void {
      */
 
     const focusSub = vscode.window.onDidChangeWindowState(state => {
-        console.log({
+        transport.send({
             type: getFocusEventType(state),
             timeStamp: Date.now()
         })
@@ -64,7 +65,7 @@ export function registerTelemetry(ctx: vscode.ExtensionContext): void {
      */
     
     const fileSwitchSub = vscode.window.onDidChangeActiveTextEditor(editor => {
-        console.log({
+        transport.send({
             type: 'FILE_SWITCH',
             timeStamp: Date.now(),
             file: editor?.document.fileName ?? null

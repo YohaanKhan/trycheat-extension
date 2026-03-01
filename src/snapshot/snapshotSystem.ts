@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { transport } from '../comms/transport';
 
 /**
  * Starts a periodic snapshot system that captures the full contents of the
@@ -24,7 +25,7 @@ export function startSnapshotSystem(ctx: vscode.ExtensionContext) {
             return;
         }
 
-        console.log({
+        transport.send({
             type: 'SNAPSHOT',
             timeStamp: Date.now(),
             file: editor.document.fileName,
