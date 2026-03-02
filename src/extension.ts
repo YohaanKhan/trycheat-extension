@@ -3,7 +3,9 @@ import { registerTelemetry } from './telemetry/telemetryModule';
 import { startSnapshotSystem } from './snapshot/snapshotSystem';
 import { authenticateStudent } from './auth/studentAuth';
 import { transport } from './comms/transport';
-import { createQAPanel } from './webview/qaPanel';
+import { registerDebuggerTracker } from './telemetry/debuggerTracker';
+import { registerTerminalTracker } from './telemetry/terminalTracker';
+import { registerFullscreenTracker } from './telemetry/fullscreenTracker';
 
 /**
  * Entry point of the TryCheat extension.
@@ -14,34 +16,32 @@ import { createQAPanel } from './webview/qaPanel';
  * 2. Connect to the backend via WebSocket
  * 3. Register all telemetry listeners
  * 4. Start the snapshot timer
- * 5. Open the Q&A panel beside the editor
  *
  * @param context - Provided by VS Code, used to register all disposables.
  */
 export async function activate(context: vscode.ExtensionContext) {
-    console.log('TryCheat activating...');
+	console.log('TryCheat activating...');
 
-    // Step 1 — Authenticate the student before starting anything
-    const auth = await authenticateStudent();
-    if (!auth) {
-        vscode.window.showErrorMessage('TryCheat: Authentication failed. Extension will not start.');
-        return;
-    }
+	// Step 1 — Authenticate the student before starting anything
+	const auth = await authenticateStudent();
+	if (!auth) {
+		vscode.window.showErrorMessage('TryCheat: Authentication failed. Extension will not start.');
+		return;
+	}
 
-    vscode.window.showInformationMessage(`TryCheat: Welcome ${auth.studentId}. Exam ${auth.examCode} is now being monitored.`);
+	vscode.window.showInformationMessage(`TryCheat: Welcome ${auth.studentId}. Exam ${auth.examCode} is now being monitored.`);
 
-    // Step 2 — Connect to backend (will queue events if backend isn't up yet)
-    transport.connect('ws://localhost:3000', auth.studentId);
+	// Step 2 — Connect to backend (will queue events if backend isn't up yet)
+	transport.connect('ws://localhost:3000', auth.studentId);
 
-    // Step 3 — Register all telemetry listeners (keystrokes, pastes, focus, file switches)
-    registerTelemetry(context);
+	// Step 3 — Register all telemetry listeners (keystrokes, pastes, focus, file switches)
+	registerTelemetry(context);
+	registerDebuggerTracker(context, transport);
+	registerTerminalTracker(context, transport);
+	registerFullscreenTracker(context, transport);
 
-    // Step 4 — Start periodic code snapshots every 60 seconds
-    startSnapshotSystem(context);
-
-    // Step 5 — Open the Q&A panel beside the editor
-    const panel = createQAPanel();
-    context.subscriptions.push({ dispose: () => panel.dispose() });
+	// Step 4 — Start periodic code snapshots every 60 seconds
+	startSnapshotSystem(context);
 }
 
 /**
@@ -49,5 +49,5 @@ export async function activate(context: vscode.ExtensionContext) {
  * Cleanly closes the WebSocket connection.
  */
 export function deactivate() {
-    transport.disconnect();
+	transport.disconnect();
 }

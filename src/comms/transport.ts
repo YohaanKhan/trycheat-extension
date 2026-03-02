@@ -20,6 +20,12 @@ class Transport {
     private queue: object[] = [];
 
     /**
+     * Optional callback invoked when a message is received from the server.
+     * Set this in extension.ts to forward NEW_QUESTION events to the Q&A panel.
+     */
+    public onMessage: ((message: unknown) => void) | null = null;
+
+    /**
      * Opens a WebSocket connection to the backend server.
      * Attaches event handlers for open, message, close, and error.
      * Flushes any queued events once the connection opens.
@@ -46,6 +52,9 @@ class Transport {
             try {
                 const message = JSON.parse(data.toString());
                 console.log('[Transport] Message from server:', message);
+                if (this.onMessage) {
+                    this.onMessage(message);
+                }
             } catch {
                 console.warn('[Transport] Received non-JSON message:', data);
             }

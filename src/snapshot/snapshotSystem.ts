@@ -7,7 +7,7 @@ import { transport } from '../comms/transport';
  *
  * Snapshots are the backbone of the session replay feature — by storing the full
  * file content at regular intervals, we can reconstruct exactly how the student's
- * code evolved over time, and feed snapshots to Ollama for analysis and question generation.
+ * code evolved over time.
  *
  * The interval is registered as a disposable in `ctx.subscriptions` so it is
  * automatically cleared when the extension deactivates — no leaked timers.
@@ -21,7 +21,7 @@ export function startSnapshotSystem(ctx: vscode.ExtensionContext) {
 
         const editor = vscode.window.activeTextEditor;
 
-        if (!editor){
+        if (!editor) {
             return;
         }
 
@@ -39,5 +39,5 @@ export function startSnapshotSystem(ctx: vscode.ExtensionContext) {
      * in the background even after the extension is gone.
      */
 
-    ctx.subscriptions.push({ dispose: ()=> clearInterval(interval)});
+    ctx.subscriptions.push({ dispose: () => clearInterval(interval) });
 }
