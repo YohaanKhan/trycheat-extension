@@ -5,7 +5,7 @@ import { authenticateStudent } from './auth/studentAuth';
 import { transport } from './comms/transport';
 import { registerDebuggerTracker } from './telemetry/debuggerTracker';
 import { registerTerminalTracker } from './telemetry/terminalTracker';
-import { registerFullscreenTracker } from './telemetry/fullscreenTracker';
+import { registerFullscreenTracker, enforceFullscreenOnStart } from './telemetry/fullscreenTracker';
 
 /**
  * Entry point of the TryCheat extension.
@@ -22,7 +22,11 @@ import { registerFullscreenTracker } from './telemetry/fullscreenTracker';
 export async function activate(context: vscode.ExtensionContext) {
 	console.log('TryCheat activating...');
 
-	// Step 1 — Authenticate the student before starting anything
+	// Step 1 — Enforce fullscreen BEFORE anything else loads
+	// This shows a modal immediately on activation; the exam cannot start until the student enters fullscreen.
+	await enforceFullscreenOnStart();
+
+	// Step 2 — Authenticate the student
 	const auth = await authenticateStudent();
 	if (!auth) {
 		vscode.window.showErrorMessage('TryCheat: Authentication failed. Extension will not start.');
@@ -31,17 +35,18 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	vscode.window.showInformationMessage(`TryCheat: Welcome ${auth.studentId}. Exam ${auth.examCode} is now being monitored.`);
 
-	// Step 2 — Connect to backend (will queue events if backend isn't up yet)
+	// Step 3 — Connect to backend
 	// Pass examCode in the URL so the server can register the session correctly
 	transport.connect('ws://localhost:3000', auth.studentId, auth.examCode);
 
-	// Step 3 — Register all telemetry listeners (keystrokes, pastes, focus, file switches)
+	// Step 4 — Register all telemetry listeners (keystrokes, pastes, focus, file switches)
 	registerTelemetry(context);
 	registerDebuggerTracker(context, transport);
 	registerTerminalTracker(context, transport);
+	// Fullscreen tracker now enforces fullscreen rather than just observing it
 	registerFullscreenTracker(context, transport);
 
-	// Step 4 — Start periodic code snapshots every 60 seconds
+	// Step 5 — Start periodic code snapshots every 60 seconds
 	startSnapshotSystem(context);
 }
 
