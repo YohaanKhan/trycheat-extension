@@ -1,17 +1,23 @@
 import * as vscode from 'vscode';
 
+/** The backend URL used for exam code and student ID validation */
+const SERVER_URL = 'http://localhost:3000';
+
 /**
- * Prompts the student to enter their exam code and student ID via VS Code input boxes.
- * Both fields are required — if either is cancelled or left empty, authentication fails.
+ * Prompts the student to enter their exam code and student ID via VS Code input boxes,
+ * then validates both against the backend before allowing the session to start.
  *
- * Server validation is skipped for now and will be added once the backend is ready.
- * Currently just logs the values and returns them directly.
+ * Flow:
+ *  1. Show InputBox for exam code
+ *  2. Show InputBox for student ID
+ *  3. POST both to `POST /auth/verify` on the backend
+ *  4. Return credentials on success, or null if cancelled / rejected
  *
- * @returns An object containing `studentId` and `examCode` if successful, or `null` if cancelled.
+ * @returns An object containing `studentId` and `examCode` if authenticated, or `null` if not.
  *
  * @example
  * const auth = await authenticateStudent();
- * if (!auth) return; // student cancelled
+ * if (!auth) return; // student cancelled or server rejected
  * transport.connect('ws://localhost:3000', auth.studentId);
  */
 export async function authenticateStudent(): Promise<{ studentId: string; examCode: string } | null> {
@@ -46,8 +52,32 @@ export async function authenticateStudent(): Promise<{ studentId: string; examCo
         return null;
     }
 
-    // TODO: validate examCode and studentId against the backend before proceeding
-    console.log(`[Auth] Student authenticated — ID: ${studentId}, Exam: ${examCode}`);
+    /**
+     * Step 3 — Validate credentials against the backend.
+     * The server checks the exam code against its registry and rejects unknown codes.
+     * If the server is unreachable, we bail out rather than silently skipping auth.
+     */
+    try {
+        const response = await fetch(`${SERVER_URL}/auth/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ studentId, examCode })
+        });
 
-    return { studentId, examCode };
+        if (!response.ok) {
+            const body = await response.json().catch(() => ({})) as Record<string, unknown>;
+            const reason = (body.message as string) ?? 'Invalid exam code or student ID.';
+            vscode.window.showErrorMessage(`TryCheat: Authentication failed — ${reason}`);
+            return null;
+        }
+
+        console.log(`[Auth] Student verified — ID: ${studentId}, Exam: ${examCode}`);
+        return { studentId, examCode };
+
+    } catch (err) {
+        // Network error — server is likely not running
+        vscode.window.showErrorMessage('TryCheat: Could not reach the exam server. Please check your connection.');
+        console.error('[Auth] Server unreachable:', err);
+        return null;
+    }
 }

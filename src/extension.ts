@@ -32,7 +32,8 @@ export async function activate(context: vscode.ExtensionContext) {
 	vscode.window.showInformationMessage(`TryCheat: Welcome ${auth.studentId}. Exam ${auth.examCode} is now being monitored.`);
 
 	// Step 2 — Connect to backend (will queue events if backend isn't up yet)
-	transport.connect('ws://localhost:3000', auth.studentId);
+	// Pass examCode in the URL so the server can register the session correctly
+	transport.connect('ws://localhost:3000', auth.studentId, auth.examCode);
 
 	// Step 3 — Register all telemetry listeners (keystrokes, pastes, focus, file switches)
 	registerTelemetry(context);

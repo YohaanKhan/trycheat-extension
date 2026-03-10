@@ -19,6 +19,19 @@ class Transport {
     /** Events buffered while the connection is not yet open */
     private queue: object[] = [];
 
+    /** Stores the last-used server URL and student ID for reconnection */
+    private serverUrl: string | null = null;
+    private studentId: string | null = null;
+
+    /** Prevents multiple reconnect timers stacking if close fires repeatedly */
+    private reconnecting: boolean = false;
+
+    /** Handle for any pending reconnect setTimeout, so disconnect() can cancel it */
+    private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** Delay in ms before attempting to reconnect after a dropped connection */
+    private readonly RECONNECT_DELAY_MS = 3000;
+
     /**
      * Optional callback invoked when a message is received from the server.
      * Set this in extension.ts to forward NEW_QUESTION events to the Q&A panel.
@@ -33,14 +46,27 @@ class Transport {
      * @param serverUrl  - The WebSocket server URL e.g. `ws://localhost:3000`
      * @param studentId  - Unique identifier for this student, appended as a query param
      */
-    connect(serverUrl: string, studentId: string): void {
+    connect(serverUrl: string, studentId: string, examCode?: string): void {
+        // Store credentials so reconnect() can reuse them without arguments
+        this.serverUrl = serverUrl;
+        this.studentId = studentId;
+        this.reconnecting = false;
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+
         // Clean up any existing connection before opening a new one
         this.disconnect();
-        this.ws = new WebSocket(`${serverUrl}?studentId=${studentId}`);
+        const url = examCode
+            ? `${serverUrl}?studentId=${studentId}&examCode=${examCode}`
+            : `${serverUrl}?studentId=${studentId}`;
+        this.ws = new WebSocket(url);
 
         /** Connection opened — flush any events that were queued before connect() was called */
         this.ws.on('open', () => {
             console.log(`[Transport] Connected to ${serverUrl} as ${studentId}`);
+            this.reconnecting = false;
             this.flush();
         });
 
@@ -60,12 +86,20 @@ class Transport {
             }
         });
 
-        /** Connection closed — warn so we know to attempt reconnection later */
+        /**
+         * Connection closed — schedule a reconnect after RECONNECT_DELAY_MS.
+         * The `reconnecting` flag prevents stacking multiple timers if close
+         * fires repeatedly before the retry fires.
+         */
         this.ws.on('close', () => {
-            console.warn('[Transport] Connection closed. Reconnection not yet implemented.');
+            if (!this.reconnecting && this.serverUrl && this.studentId) {
+                this.reconnecting = true;
+                console.warn(`[Transport] Connection closed. Reconnecting in ${this.RECONNECT_DELAY_MS}ms...`);
+                this.reconnectTimer = setTimeout(() => this.connect(this.serverUrl!, this.studentId!), this.RECONNECT_DELAY_MS);
+            }
         });
 
-        /** Connection error — warn with details */
+        /** Connection error — warn with details (close will fire next and handle retry) */
         this.ws.on('error', (err: Error) => {
             console.warn('[Transport] WebSocket error:', err.message);
         });
@@ -90,6 +124,12 @@ class Transport {
      * Safe to call even if no connection is open.
      */
     disconnect(): void {
+        // Cancel any pending reconnect before closing — prevents ghost reconnects
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+        this.reconnecting = false;
         if (this.ws) {
             this.ws.removeAllListeners();
             this.ws.close();
