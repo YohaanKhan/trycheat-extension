@@ -7,6 +7,8 @@ import { registerDebuggerTracker } from './telemetry/debuggerTracker';
 import { registerTerminalTracker } from './telemetry/terminalTracker';
 import { registerFullscreenTracker, enforceFullscreenOnStart } from './telemetry/fullscreenTracker';
 
+let submitStatusBarItem: vscode.StatusBarItem;
+
 /**
  * Entry point of the TryCheat extension.
  * Runs once when VS Code activates the extension.
@@ -37,7 +39,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Step 3 — Connect to backend
 	// Pass examCode in the URL so the server can register the session correctly
-	transport.connect('ws://localhost:3000', auth.studentId, auth.examCode);
+	transport.connect(auth.wsUrl, auth.studentId, auth.examCode);
 
 	// Step 4 — Register all telemetry listeners (keystrokes, pastes, focus, file switches)
 	registerTelemetry(context);
@@ -48,6 +50,35 @@ export async function activate(context: vscode.ExtensionContext) {
 
 	// Step 5 — Start periodic code snapshots every 60 seconds
 	startSnapshotSystem(context);
+
+	// Step 6 — Register Submit Exam command and UI button
+	const submitCmd = vscode.commands.registerCommand('examguard.submitExam', async () => {
+		const choice = await vscode.window.showWarningMessage(
+			'Are you sure you want to submit your exam? This will terminate your monitored session and notify the teacher.',
+			{ modal: true },
+			'Yes, Submit'
+		);
+		if (choice === 'Yes, Submit') {
+			transport.send({ type: 'EXAM_SUBMITTED', timeStamp: Date.now() });
+
+			// Give the socket a tiny bit to flush before disconnecting
+			setTimeout(() => {
+				transport.disconnect();
+				vscode.window.showInformationMessage('Exam submitted successfully! You may now close VS Code.');
+				submitStatusBarItem.text = '$(pass) Exam Submitted';
+				submitStatusBarItem.color = '#3fb950';
+				submitStatusBarItem.command = undefined; // Disable clicking it again
+			}, 500);
+		}
+	});
+
+	submitStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+	submitStatusBarItem.text = '$(cloud-upload) Submit Exam';
+	submitStatusBarItem.command = 'examguard.submitExam';
+	submitStatusBarItem.color = '#e08e45'; // Orange to stand out
+	submitStatusBarItem.show();
+
+	context.subscriptions.push(submitCmd, submitStatusBarItem);
 }
 
 /**

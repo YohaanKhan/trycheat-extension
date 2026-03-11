@@ -18,6 +18,11 @@
       {
         "command": "trycheat.helloWorld",
         "title": "Hello World"
+      },
+      {
+        "command": "examguard.submitExam",
+        "title": "ExamGuard: Submit Exam",
+        "icon": "$(cloud-upload)"
       }
     ]
   },

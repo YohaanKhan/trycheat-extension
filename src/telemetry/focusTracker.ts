@@ -37,10 +37,10 @@ export function isFocusLost(state: vscode.WindowState): boolean {
  */
 
 export function getFocusEventType(state: vscode.WindowState): string {
-    if ( !state.focused ) {
+    if (!state.focused) {
         return 'FOCUS_LOST';
     }
-    else{
+    else {
         return 'FOCUS_GAINED';
     }
 }

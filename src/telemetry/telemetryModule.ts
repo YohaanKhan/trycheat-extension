@@ -40,7 +40,7 @@ export function registerTelemetry(ctx: vscode.ExtensionContext): void {
                 continue; // Stop processing this change if it's a mass deletion
             }
 
-            // 2. Check for traditional pastes
+            // 3. Check for traditional pastes
             const isPaste = detectPaste(change);
 
             if (isPaste) {
@@ -108,10 +108,9 @@ export function registerTelemetry(ctx: vscode.ExtensionContext): void {
             if (textToCopy) {
                 await vscode.env.clipboard.writeText(textToCopy);
             }
-        } else {
-            // Fallback for non-editor contexts (like explorer), though this command is specific to editors
-            await vscode.commands.executeCommand('editor.action.clipboardCopyAction');
         }
+        // No else branch needed — this command only fires in editor contexts.
+        // The previous fallback called this same command recursively, causing an infinite loop.
     });
 
     ctx.subscriptions.push(docChangeSub, focusSub, fileSwitchSub, copySub);

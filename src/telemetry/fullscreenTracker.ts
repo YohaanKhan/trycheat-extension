@@ -5,10 +5,16 @@ import { execSync } from 'child_process';
 const MAX_DISMISSALS = 2;
 
 /** Number of seconds between each re-enforcement check when not fullscreen */
-const RECHECK_INTERVAL_MS = 5000;
+const RECHECK_INTERVAL_MS = 30_000;
+
+/** Cooldown period after a modal is dismissed before another can be shown */
+const MODAL_COOLDOWN_MS = 30_000;
+
+/** Debounce period — ignore focus-lost events within this window of a focus-gained event */
+const FOCUS_DEBOUNCE_MS = 1500;
 
 type FullscreenEvent = {
-    type: 'FULLSCREEN_EXIT' | 'FULLSCREEN_RETURN' | 'FULLSCREEN_BLOCKED';
+    type: 'FULLSCREEN_EXIT' | 'FULLSCREEN_RETURN' | 'FULLSCREEN_BLOCKED' | 'WARNING_ISSUED';
     timeStamp: number;
     dismissalCount?: number;
     displayCount?: number;
@@ -51,9 +57,8 @@ async function requestFullscreen(): Promise<void> {
  * Behaviour when VS Code loses focus (proxy for exiting fullscreen):
  *  1. Send a `FULLSCREEN_EXIT` telemetry event to the backend (score bump applied server-side).
  *  2. Show a blocking VS Code warning modal with a countdown.
- *  3. After MAX_DISMISSALS dismissals, send `FULLSCREEN_BLOCKED` and show a hard error
- *     that cannot be dismissed — the student must make VS Code fullscreen again.
- *  4. Every RECHECK_INTERVAL_MS while not fullscreen, re-prompt automatically.
+ *  3. After MAX_DISMISSALS dismissals, silently send `FULLSCREEN_BLOCKED` events — no more modals.
+ *  4. Every RECHECK_INTERVAL_MS while not fullscreen, re-prompt (up to MAX_DISMISSALS times).
  *
  * Pre-exam gate:
  *  Call `enforceFullscreenOnStart()` from extension.ts before registering any
@@ -72,7 +77,10 @@ export function registerFullscreenTracker(
 ) {
     let dismissalCount = 0;
     let isCurrentlyFocused = true;
+    let isModalShowing = false;
     let recheckTimer: ReturnType<typeof setInterval> | null = null;
+    let lastModalDismissedAt = 0;
+    let lastFocusGainedAt = 0;
 
     // --- Multi-monitor check on start ---
     const displayCount = getDisplayCount();
@@ -92,10 +100,15 @@ export function registerFullscreenTracker(
     function startRecheckTimer() {
         if (recheckTimer) return;
         recheckTimer = setInterval(async () => {
-            if (!isCurrentlyFocused) {
+            if (!isCurrentlyFocused && !isWithinCooldown()) {
                 await showEnforcementModal();
             }
         }, RECHECK_INTERVAL_MS);
+    }
+
+    /** Returns true if a modal was dismissed recently (within MODAL_COOLDOWN_MS) */
+    function isWithinCooldown(): boolean {
+        return Date.now() - lastModalDismissedAt < MODAL_COOLDOWN_MS;
     }
 
     function stopRecheckTimer() {
@@ -106,54 +119,64 @@ export function registerFullscreenTracker(
     }
 
     async function showEnforcementModal() {
-        dismissalCount++;
+        if (isModalShowing) return;
+        isModalShowing = true;
 
-        if (dismissalCount > MAX_DISMISSALS) {
-            // Hard block — cannot be dismissed, only shows "Return to Fullscreen"
-            transport.send({ type: 'FULLSCREEN_BLOCKED', timeStamp: Date.now(), dismissalCount });
-
-            const choice = await vscode.window.showErrorMessage(
-                `⛔ ExamGuard: You have been flagged for repeatedly leaving fullscreen. ` +
-                `Return VS Code to fullscreen immediately. This incident has been reported.`,
-                { modal: true },
-                'Return to Fullscreen'
-            );
-
-            if (choice === 'Return to Fullscreen') {
-                await requestFullscreen();
+        try {
+            if (dismissalCount >= MAX_DISMISSALS) {
+                // Already hit the limit — silently report, no more modals
+                transport.send({ type: 'FULLSCREEN_BLOCKED', timeStamp: Date.now(), dismissalCount });
+                stopRecheckTimer();
+                return;
             }
-        } else {
-            // Soft warning — student can dismiss but it counts against them
-            const remaining = MAX_DISMISSALS - dismissalCount + 1;
+
+            dismissalCount++;
+
+            // Soft warning
+            transport.send({ type: 'WARNING_ISSUED', timeStamp: Date.now(), dismissalCount });
+            const remaining = MAX_DISMISSALS - dismissalCount;
             const choice = await vscode.window.showWarningMessage(
-                `⚠️ ExamGuard: VS Code is not fullscreen. ` +
-                `You have ${remaining} warning(s) remaining before this incident is escalated. ` +
-                `Please return to fullscreen immediately.`,
+                `⚠️ ExamGuard: Focus lost (navigated away from exam). ` +
+                `${remaining > 0 ? `You have ${remaining} warning(s) remaining.` : `This is your final warning.`} ` +
+                `Please stay focused on VS Code.`,
                 { modal: true },
-                'Return to Fullscreen',
-                'Dismiss (flagged)'
+                'Acknowledge',
+                'Toggle Fullscreen (if missing)'
             );
 
-            if (choice === 'Return to Fullscreen') {
+            if (choice === 'Toggle Fullscreen (if missing)') {
                 await requestFullscreen();
             }
-            // "Dismiss (flagged)" or closing the dialog = counts as a strike, already incremented
+
+            // After the last warning, kill the recheck timer — just silently report from here
+            if (dismissalCount >= MAX_DISMISSALS) {
+                stopRecheckTimer();
+            }
+        } finally {
+            isModalShowing = false;
+            lastModalDismissedAt = Date.now();
         }
     }
 
     // --- Main focus-change listener ---
     const windowStateSub = vscode.window.onDidChangeWindowState(async (state) => {
-
         if (state.focused && !isCurrentlyFocused) {
             // Student returned to VS Code
             isCurrentlyFocused = true;
+            lastFocusGainedAt = Date.now();
             stopRecheckTimer();
-            dismissalCount = 0; // Reset after they return
 
             transport.send({ type: 'FULLSCREEN_RETURN', timeStamp: Date.now() });
             vscode.window.showInformationMessage('ExamGuard: Welcome back. Please stay in VS Code.');
 
         } else if (!state.focused && isCurrentlyFocused) {
+            // Debounce: ignore rapid focus-lost events that occur right after a
+            // focus-gained (e.g. when the student clicks "Acknowledge" on the modal
+            // and the window briefly gains then loses focus again).
+            if (Date.now() - lastFocusGainedAt < FOCUS_DEBOUNCE_MS) {
+                return;
+            }
+
             // Student left VS Code
             isCurrentlyFocused = false;
 
@@ -164,8 +187,10 @@ export function registerFullscreenTracker(
                 displayCount
             });
 
-            await showEnforcementModal();
             startRecheckTimer();
+            if (!isWithinCooldown()) {
+                await showEnforcementModal();
+            }
         }
     });
 
@@ -187,10 +212,11 @@ export async function enforceFullscreenOnStart(): Promise<void> {
     const choice = await vscode.window.showWarningMessage(
         '🔒 ExamGuard requires VS Code to be in fullscreen mode for the duration of the exam.',
         { modal: true },
-        'Enter Fullscreen & Continue'
+        'Ready (I am in Fullscreen)',
+        'Enter Fullscreen for me'
     );
 
-    if (choice === 'Enter Fullscreen & Continue') {
+    if (choice === 'Enter Fullscreen for me') {
         await requestFullscreen();
         // Brief pause to let the OS animate the fullscreen transition
         await new Promise(resolve => setTimeout(resolve, 600));
