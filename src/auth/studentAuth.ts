@@ -8,17 +8,18 @@ import * as vscode from 'vscode';
  *  1. Show InputBox for Server URL
  *  2. Show InputBox for exam code
  *  3. Show InputBox for student ID
- *  4. POST both to `POST /auth/verify` on the backend
- *  5. Return credentials on success, or null if cancelled / rejected
+ *  4. Show InputBox for password
+ *  5. POST both to `POST /auth/verify` on the backend
+ *  6. Return credentials on success, or null if cancelled / rejected
  *
- * @returns An object containing `studentId`, `examCode`, and `wsUrl` if authenticated, or `null` if not.
+ * @returns An object containing `studentId`, `examCode`, `password` and `wsUrl` if authenticated, or `null` if not.
  *
  * @example
  * const auth = await authenticateStudent();
  * if (!auth) return; // student cancelled or server rejected
  * transport.connect(auth.wsUrl, auth.studentId);
  */
-export async function authenticateStudent(): Promise<{ studentId: string; examCode: string; wsUrl: string } | null> {
+export async function authenticateStudent(): Promise<{ studentId: string; examCode: string; password?: string; wsUrl: string } | null> {
 
     while (true) {
         /**
@@ -83,13 +84,32 @@ export async function authenticateStudent(): Promise<{ studentId: string; examCo
         }
 
         /**
+         * Step 3.5 — Ask for the password.
+         */
+        const password = await vscode.window.showInputBox({
+            prompt: 'Enter your Exam Password',
+            placeHolder: 'e.g. secret123',
+            password: true,
+            ignoreFocusOut: true
+        });
+
+        if (password === undefined) {
+            return null;
+        }
+
+        if (!password) {
+            vscode.window.showErrorMessage('Password is required to start the session.');
+            continue;
+        }
+
+        /**
          * Step 4 — Validate credentials against the backend.
          */
         try {
             const response = await fetch(`${httpUrl}/auth/verify`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ studentId, examCode })
+                body: JSON.stringify({ studentId, examCode, password })
             });
 
             if (!response.ok) {
@@ -100,7 +120,7 @@ export async function authenticateStudent(): Promise<{ studentId: string; examCo
             }
 
             console.log(`[Auth] Student verified — ID: ${studentId}, Exam: ${examCode}, URL: ${wsUrl}`);
-            return { studentId, examCode, wsUrl };
+            return { studentId, examCode, password, wsUrl };
 
         } catch (err) {
             // Network error — server is likely not running

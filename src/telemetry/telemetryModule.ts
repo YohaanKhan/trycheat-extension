@@ -82,11 +82,17 @@ export function registerTelemetry(ctx: vscode.ExtensionContext): void {
      */
 
     const fileSwitchSub = vscode.window.onDidChangeActiveTextEditor(editor => {
+        const timeStamp = Date.now();
+        const fileName = editor?.document.fileName ?? null;
+
+        // Send file switch event with immediate content capture
+        // Captured as a regular event (not a SNAPSHOT) so it appears in the timeline history
         transport.send({
             type: 'FILE_SWITCH',
-            timeStamp: Date.now(),
-            file: editor?.document.fileName ?? null
-        })
+            timeStamp,
+            file: fileName,
+            content: editor ? editor.document.getText() : null
+        });
     })
 
     /**
