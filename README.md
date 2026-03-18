@@ -1,34 +1,42 @@
-# TryCheat (ExamGuard) VS Code Extension
+# TryCheat (ExamGuard Client) - VS Code Extension
 
-An AI-powered exam monitoring system built as a VS Code extension. It tracks telemetry such as window focus, full-screen status, terminal usage, and debugger activity to ensure exam integrity.
+An AI-powered, real-time exam monitoring system built directly into Visual Studio Code. **TryCheat** ensures academic integrity without requiring invasive proctoring software—all telemetry is captured natively within the editor.
 
-## Prerequisites
+## 🚀 Key Features and Telemetry
 
-- Visual Studio Code (`^1.95.0`)
-- Node.js (v18 or higher recommended)
-- The [ExamGuard Server](../examguard-server) must be running to receive telemetry.
+### 1. Window & Focus Monitoring
+- **Focus Tracker:** Monitors when the student switches away from the VS Code window (e.g., clicking on a web browser to search for answers).
+- **Fullscreen Tracker:** Ensures the student maintains VS Code in full-screen mode throughout the exam duration.
 
-## Setup
+### 2. Code Execution & IDE Activity
+- **Terminal Tracker:** Monitors terminal commands executed by the student to prevent running unauthorized scripts or fetching external code.
+- **Debugger Tracker:** Tracks if the student attempts to attach external debuggers to bypass restrictions or modify memory.
 
-1. **Install dependencies:**
+### 3. Code Integrity & Snapshots
+- **Bulk Deletion Tracker:** Flags suspicious massive code deletions or enormous instant copy-pastes that suggest cheating.
+- **Snapshot System:** Takes periodic, automated diff snapshots of the workspace to maintain a historical log of the student's coding pace and ensure organic problem-solving.
+
+### 4. Real-time Synchronization
+- Streams all telemetry securely to the central **ExamGuard Server** over WebSockets.
+- Includes a real-time heartbeat mechanism to prevent users from simply disconnecting their internet to bypass tracking.
+
+---
+
+## 🛠️ Architecture and How it Works
+
+1. **Activation**: The extension activates when the student connects to a session or runs `ExamGuard: Submit Exam`. 
+2. **Authentication**: It securely authenticates the student identity with the backend server via `src/auth/studentAuth.ts`.
+3. **Telemetry Engine**: Once the exam starts, multiple specialized "Trackers" (like `focusTracker`, `terminalTracker`, `deletionTracker`) bind to VS Code's native Node.js Window and Workspace APIs to silently listen for lifecycle events.
+4. **WebSocket Streaming**: As infractions occur or as normal snapshot intervals pass, a JSON payload is generated and streamed live over WebSockets to the server for administrative review.
+
+---
+
+## 📥 Setup and Installation
+
+1. Make sure you have the [ExamGuard Server](../examguard-server) running locally or hosted online.
+2. Install dependencies:
    ```bash
    npm install
    ```
-
-2. **Configure Connection (if needed):**
-   Ensure the extension is configured to connect to your local ExamGuard server's WebSocket URL (typically `ws://localhost:3005`).
-
-## Development & Running
-
-To run and test the extension locally:
-
-1. Open this repository in VS Code.
-2. Press `F5` to open a new VS Code window with the extension loaded (Extension Development Host).
-3. Alternatively, you can run the compiler in watch mode:
-   ```bash
-   npm run watch
-   ```
-
-## Available Commands
-- `TryCheat: Hello World` - A test command to verify activation.
-- `ExamGuard: Submit Exam` - Command for students to manually trigger exam submission.
+3. Open the repository in VS Code and press **F5** to start debugging. This will open an Extension Development Host.
+4. Run `TryCheat: Hello World` to verify activation.
