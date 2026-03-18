@@ -3,6 +3,11 @@
   "displayName": "TryCheat",
   "description": "AI-powered exam monitoring system",
   "version": "0.0.1",
+  "publisher": "yohaankhan",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YohaanKhan/trycheat-extension.git"
+  },
   "engines": {
     "vscode": "^1.95.0"
   },
