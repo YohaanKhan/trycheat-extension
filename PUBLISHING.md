@@ -1,55 +1,32 @@
-# Publishing to the VS Code Marketplace
+# Publishing to Open VSX (Free Alternative)
 
-To publish this extension so others can install it directly from VS Code, follow these steps:
+[Open VSX](https://open-vsx.org/) is the popular, open-source alternative to the official Microsoft Marketplace. It does not require a credit card or Microsoft Azure account to publish!
 
 ## 1. Prerequisites
 
-You need two things before you can publish:
 1. **Node.js** installed on your machine.
-2. **`vsce`** (Visual Studio Code Extension Manager) CLI installed globally.
+2. **`ovsx`** CLI installed globally.
 
-Install `vsce` by running:
+Install `ovsx` by running:
 ```bash
-npm install -g @vscode/vsce
+npm install -g ovsx
 ```
 
-## 2. Create a Publisher
+## 2. Create a Namespace and Token
 
-Before you can publish, you need to create a publisher on the Visual Studio Marketplace.
+1. Go to [open-vsx.org](https://open-vsx.org/) and sign in with your GitHub account.
+2. Once signed in, go to your **Settings** (click your avatar -> Settings).
+3. Create a new **Access Token** and copy it to a safe place.
+4. Go to the **Namespaces** tab from your dashboard and click **Create Namespace**. The name must match the `"publisher"` field in our `package.json` (`yohaankhan`). This verifies you as the owner of this extension name.
 
-1. Go to the [Azure DevOps portal](https://dev.azure.com/) and create an organization if you don't have one.
-2. Go to the [VS Marketplace Management Page](https://marketplace.visualstudio.com/manage) and sign in.
-3. Click on **Create publisher** and set your Publisher ID (e.g., `yohaankhan`). This must match the `"publisher"` field in `package.json`.
+## 3. Publish the Extension
 
-## 3. Generate a Personal Access Token (PAT)
-
-You need a token to authenticate `vsce` with your Azure DevOps account:
-
-1. In Azure DevOps, go to **User settings** (icon near top right) -> **Personal access tokens**.
-2. Click **New Token**.
-3. Name it (e.g., "VS Code Extension Publishing").
-4. Under **Organizations**, select `All accessible organizations`.
-5. Under **Scopes**, scroll down and check **Marketplace** > **Acquire** and **Manage**.
-6. Click **Create** and **save the token** securely. You will not see it again.
-
-## 4. Login with `vsce`
-
-Open your terminal in the `trycheat` folder and login using `vsce`:
+Open your terminal in the `trycheat` folder and publish the extension in one command, passing your access token:
 
 ```bash
-vsce login <YOUR_PUBLISHER_ID>
-```
-When prompted, paste the Personal Access Token (PAT) you generated.
-
-## 5. Publish the Extension
-
-Once logged in, package and publish the extension in one command:
-
-```bash
-vsce publish
+ovsx publish -p YOUR_ACCESS_TOKEN_HERE
 ```
 
 ### Notes
-- Ensure your `README.md` is descriptive as it will be the main page of your extension on the Marketplace.
-- If you'd rather verify the package before publishing, you can run `vsce package`. This will create a `.vsix` file which you can manually install in VS Code to test the production build.
-- You can upload an `"icon": "icon.png"` in your `package.json` for a better marketplace presence.
+- If you'd rather package the extension without publishing, you can run `npx @vscode/vsce package` to create a `.vsix` file to manually share with your friends.
+- You can upload an `"icon": "icon.png"` in your `package.json` to make it stand out more in the registry.
